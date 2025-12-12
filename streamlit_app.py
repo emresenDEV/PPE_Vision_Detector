@@ -17,7 +17,7 @@ st.set_page_config(
     page_title="SafetyVision AI",
     page_icon="🦺",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom CSS for better styling
@@ -48,14 +48,63 @@ st.markdown("""
 @st.cache_resource
 def load_detector():
     """Load YOLOv8 model (cached for performance)"""
+    # Fixed confidence threshold at 0.5
     return PPEDetector(confidence_threshold=0.5)
 
 
 @st.cache_resource
 def load_gemini():
     """Load Gemini recommender (cached for performance)"""
-    api_key = os.getenv('GEMINI_API_KEY')
+    # Use Gemini API key from Streamlit secrets or environment
+    api_key = st.secrets.get('GEMINI_API_KEY', os.getenv('GEMINI_API_KEY'))
     return GeminiRecommendations(api_key=api_key)
+
+
+def process_image(image_source, source_type="upload"):
+    """
+    Process image from either upload or webcam
+    
+    Args:
+        image_source: PIL Image or UploadedFile
+        source_type: "upload" or "webcam"
+    """
+    # Convert to PIL Image if needed
+    if source_type == "webcam":
+        image = image_source
+    else:
+        image = Image.open(image_source)
+    
+    # Save to temp file for processing
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+        image.save(tmp_file.name)
+        temp_image_path = tmp_file.name
+    
+    # Run detection
+    with st.spinner("🔍 Running PPE detection..."):
+        detector = load_detector()
+        detections = detector.detect(temp_image_path)
+        summary = detector.classify_compliance(detections)
+        
+        # Store in session state
+        st.session_state['detections'] = detections
+        st.session_state['summary'] = summary
+        st.session_state['image_path'] = temp_image_path
+    
+    # Create visualizations
+    with st.spinner("🎨 Creating visualizations..."):
+        annotated_image = draw_detections(
+            temp_image_path,
+            detections,
+            output_path=None
+        )
+        
+        final_image = create_summary_overlay(annotated_image, summary)
+        
+        annotated_path = temp_image_path.replace('.jpg', '_annotated.jpg')
+        Image.fromarray(final_image).save(annotated_path)
+        st.session_state['annotated_path'] = annotated_path
+    
+    st.success("✅ Detection complete!")
 
 
 def main():
@@ -66,101 +115,52 @@ def main():
     st.markdown("### Automated PPE Compliance Detection System")
     st.markdown("---")
     
-    # Sidebar
-    with st.sidebar:
-        st.header("⚙️ Configuration")
-        
-        # Confidence threshold slider
-        confidence_threshold = st.slider(
-            "Detection Confidence Threshold",
-            min_value=0.1,
-            max_value=0.9,
-            value=0.5,
-            step=0.1,
-            help="Minimum confidence for detections (lower = more detections, higher = fewer false positives)"
-        )
-        
-        # Gemini API key input (optional)
-        st.markdown("---")
-        st.subheader("🤖 AI Recommendations")
-        gemini_api_key = st.text_input(
-            "Gemini API Key (Optional)",
-            type="password",
-            help="Enter your Google Gemini API key for AI-powered recommendations. Leave blank to use rule-based fallback."
-        )
-        
-        if gemini_api_key:
-            os.environ['GEMINI_API_KEY'] = gemini_api_key
-        
-        st.markdown("---")
-        st.markdown("### About")
-        st.info(
-            "SafetyVision AI uses computer vision to detect PPE violations "
-            "and generate comprehensive safety reports with AI-powered recommendations."
-        )
-        
-        st.markdown("### Tech Stack")
-        st.code("YOLOv8 | Gemini | Streamlit | ReportLab")
+    # Input method selection
+    st.subheader("📸 Choose Input Method")
+    input_method = st.radio(
+        "Select how to provide an image:",
+        ["📤 Upload Image", "📷 Use Webcam"],
+        horizontal=True
+    )
+    
+    st.markdown("---")
     
     # Main content
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.subheader("📤 Upload Image")
-        uploaded_file = st.file_uploader(
-            "Choose an image of workers at the site",
-            type=['jpg', 'jpeg', 'png', 'webp'],
-            help="Upload a clear image showing workers. Best results with good lighting."
-        )
-        
-        if uploaded_file is not None:
-            # Display original image
-            image = Image.open(uploaded_file)
-            st.image(image, caption="Original Image", use_container_width=True)
+        if input_method == "📤 Upload Image":
+            st.subheader("📤 Upload Image")
+            uploaded_file = st.file_uploader(
+                "Choose an image of workers at the site",
+                type=['jpg', 'jpeg', 'png', 'webp'],
+                help="Upload a clear image showing workers. Best results with good lighting."
+            )
             
-            # Save to temp file for processing
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-                image.save(tmp_file.name)
-                temp_image_path = tmp_file.name
+            if uploaded_file is not None:
+                # Display original image
+                image = Image.open(uploaded_file)
+                st.image(image, caption="Uploaded Image")
+                
+                # Analyze button
+                if st.button("🚀 Analyze PPE Compliance", type="primary", use_container_width=True, key="analyze_upload"):
+                    process_image(uploaded_file, source_type="upload")
+        
+        else:  # Webcam mode
+            st.subheader("📷 Webcam Capture")
+            camera_image = st.camera_input("Take a picture of workers at the site")
+            
+            if camera_image is not None:
+                # Display captured image
+                image = Image.open(camera_image)
+                st.image(image, caption="Captured Image")
+                
+                # Analyze button
+                if st.button("🚀 Analyze PPE Compliance", type="primary", use_container_width=True, key="analyze_webcam"):
+                    process_image(image, source_type="webcam")
     
     with col2:
         st.subheader("🔍 Detection Results")
-        
-        if uploaded_file is not None:
-            # Run detection button
-            if st.button("🚀 Analyze PPE Compliance", type="primary", use_container_width=True):
-                
-                with st.spinner("🔍 Running PPE detection..."):
-                    # Load detector
-                    detector = load_detector()
-                    detector.confidence_threshold = confidence_threshold
-                    
-                    # Run detection
-                    detections = detector.detect(temp_image_path)
-                    summary = detector.classify_compliance(detections)
-                    
-                    # Store in session state
-                    st.session_state['detections'] = detections
-                    st.session_state['summary'] = summary
-                    st.session_state['image_path'] = temp_image_path
-                
-                with st.spinner("🎨 Creating visualizations..."):
-                    # Create annotated image
-                    annotated_image = draw_detections(
-                        temp_image_path,
-                        detections,
-                        output_path=None
-                    )
-                    
-                    # Add summary overlay
-                    final_image = create_summary_overlay(annotated_image, summary)
-                    
-                    # Store annotated image
-                    annotated_path = temp_image_path.replace('.jpg', '_annotated.jpg')
-                    Image.fromarray(final_image).save(annotated_path)
-                    st.session_state['annotated_path'] = annotated_path
-                
-                st.success("✅ Detection complete!")
         
         # Display results if available
         if 'summary' in st.session_state:
@@ -187,6 +187,8 @@ def main():
             # Compliance rate
             st.progress(summary['compliance_rate'] / 100)
             st.caption(f"Compliance Rate: {summary['compliance_rate']:.1f}%")
+        else:
+            st.info("👆 Upload an image or capture from webcam to begin detection")
     
     # Annotated image and recommendations
     if 'annotated_path' in st.session_state:
@@ -196,8 +198,8 @@ def main():
         
         with col3:
             st.subheader("📸 Annotated Image")
-            st.image(st.session_state['annotated_path'], use_container_width=True)
-            st.caption("Red boxes = violations | Green boxes = compliant")
+            st.image(st.session_state['annotated_path'])
+            st.caption("🟢 Green = Compliant | 🔴 Red = Violation | 🟡 Yellow = Warning")
         
         with col4:
             st.subheader("🤖 AI Safety Recommendations")
@@ -215,9 +217,11 @@ def main():
             for i, rec in enumerate(recommendations, 1):
                 st.markdown(f"**{i}.** {rec}")
             
-            # If using fallback, show info
-            if not recommender.enabled:
-                st.info("💡 Using rule-based recommendations. Add Gemini API key in sidebar for AI-powered insights.")
+            # Show status
+            if recommender.enabled:
+                st.caption("✨ Powered by Google Gemini AI")
+            else:
+                st.caption("📋 Using rule-based recommendations")
     
     # PDF Generation
     if 'recommendations' in st.session_state:
@@ -269,7 +273,26 @@ def main():
                 use_container_width=True
             )
     
-    # Footer
+    # Footer with About and Tech Stack
+    st.markdown("---")
+    
+    # About and Tech Stack at bottom
+    col_footer1, col_footer2 = st.columns([1, 1])
+    
+    with col_footer1:
+        st.markdown("### About SafetyVision AI")
+        st.info(
+            "SafetyVision AI uses computer vision to detect PPE violations "
+            "and generate comprehensive safety reports with AI-powered recommendations. "
+            "Built for Oil & Gas + Utilities industries to enhance workplace safety."
+        )
+    
+    with col_footer2:
+        st.markdown("### Tech Stack")
+        st.code("YOLOv8 | Google Gemini | Streamlit | ReportLab")
+        st.caption("Confidence Threshold: 0.5 (optimized for safety-critical applications)")
+    
+    # Credits
     st.markdown("---")
     st.markdown(
         "<p style='text-align: center; color: gray;'>Built with ❤️ using YOLOv8, Google Gemini, and Streamlit | "
