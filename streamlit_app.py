@@ -116,7 +116,7 @@ def main():
         if uploaded_file is not None:
             # Display original image
             image = Image.open(uploaded_file)
-            st.image(image, caption="Original Image", width="stretch")
+            st.image(image, caption="Original Image", use_container_width=True)
             
             # Save to temp file for processing
             with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
@@ -196,7 +196,7 @@ def main():
         
         with col3:
             st.subheader("📸 Annotated Image")
-            st.image(st.session_state['annotated_path'], width="stretch")
+            st.image(st.session_state['annotated_path'], use_container_width=True)
             st.caption("Red boxes = violations | Green boxes = compliant")
         
         with col4:
