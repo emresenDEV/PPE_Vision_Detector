@@ -128,7 +128,7 @@ def main():
         
         if uploaded_file is not None:
             # Run detection button
-            if st.button("🚀 Analyze PPE Compliance", type="primary", width="stretch"):
+            if st.button("🚀 Analyze PPE Compliance", type="primary", use_container_width=True):
                 
                 with st.spinner("🔍 Running PPE detection..."):
                     # Load detector
@@ -236,7 +236,7 @@ def main():
             """)
         
         with col6:
-            if st.button("📥 Generate PDF Report", type="primary", width="stretch"):
+            if st.button("📥 Generate PDF Report", type="primary", use_container_width=True):
                 with st.spinner("📄 Creating PDF report..."):
                     # Generate PDF
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -266,7 +266,7 @@ def main():
                 data=st.session_state['pdf_bytes'],
                 file_name=st.session_state['pdf_filename'],
                 mime='application/pdf',
-                width="stretch"
+                use_container_width=True
             )
     
     # Footer
