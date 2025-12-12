@@ -116,7 +116,7 @@ def main():
         if uploaded_file is not None:
             # Display original image
             image = Image.open(uploaded_file)
-            st.image(image, caption="Original Image", use_container_width=True)
+            st.image(image, caption="Original Image", width="stretch")
             
             # Save to temp file for processing
             with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
@@ -128,7 +128,7 @@ def main():
         
         if uploaded_file is not None:
             # Run detection button
-            if st.button("🚀 Analyze PPE Compliance", type="primary", use_container_width=True):
+            if st.button("🚀 Analyze PPE Compliance", type="primary", width="stretch"):
                 
                 with st.spinner("🔍 Running PPE detection..."):
                     # Load detector
@@ -196,7 +196,7 @@ def main():
         
         with col3:
             st.subheader("📸 Annotated Image")
-            st.image(st.session_state['annotated_path'], use_container_width=True)
+            st.image(st.session_state['annotated_path'], width="stretch")
             st.caption("Red boxes = violations | Green boxes = compliant")
         
         with col4:
@@ -236,7 +236,7 @@ def main():
             """)
         
         with col6:
-            if st.button("📥 Generate PDF Report", type="primary", use_container_width=True):
+            if st.button("📥 Generate PDF Report", type="primary", width="stretch"):
                 with st.spinner("📄 Creating PDF report..."):
                     # Generate PDF
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -266,7 +266,7 @@ def main():
                 data=st.session_state['pdf_bytes'],
                 file_name=st.session_state['pdf_filename'],
                 mime='application/pdf',
-                use_container_width=True
+                width="stretch"
             )
     
     # Footer

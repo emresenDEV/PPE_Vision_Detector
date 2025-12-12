@@ -1,11 +1,12 @@
 fastapi 
 uvicorn[standard] 
 torch==2.2.2  # PyTorch
-numpy==1.24.3
-torchvision==0.16.0
+numpy==1.26.4
+torchvision==0.17.2
 ultralytics==8.0.200   # YOLOv8 package
 opencv-python-headless==4.8.1.78 #OpenCV
 reportlab==4.0.7 #ReportLab for PDF generation
 streamlit==1.28.0 # Streamlit for web app development
 google-generativeai==0.3.1 # Google Generative Gemini AI SDK
 python-dotenv==1.0.0
+Pillow==10.1.0
