@@ -96,12 +96,10 @@ class PPEDetector:
         }
 
         Current approach (DEMO/MVP ONLY):
-        Since COCO dataset does not contain hardhat classes, we use a conservative
-        color-based heuristic to detect bright colored objects (yellow, orange, red)
-        in the head region which are typical hardhat colors.
-
-        IMPORTANT: This defaults to FALSE (no hardhat) for safety.
-        Only returns TRUE if strong evidence of hardhat is found.
+        Multi-stage detection combining color and brightness analysis:
+        1. Color-based detection for typical hardhat colors
+        2. Brightness analysis for white/light colored hardhats
+        3. Saturation analysis to differentiate hardhats from skin/hair
 
         Args:
             bbox: Bounding box coordinates [x1, y1, x2, y2]
@@ -115,9 +113,9 @@ class PPEDetector:
             img = cv2.imread(image_path)
             x1, y1, x2, y2 = map(int, bbox)
 
-            # Extract head region (top 25% of person bbox)
+            # Extract head region (top 30% of person bbox - slightly larger for better detection)
             person_height = y2 - y1
-            head_region_height = int(person_height * 0.25)
+            head_region_height = int(person_height * 0.30)
             head_y2 = y1 + head_region_height
 
             # Ensure coordinates are within image bounds
@@ -125,28 +123,45 @@ class PPEDetector:
                              max(0, x1):min(img.shape[1], x2)]
 
             if head_region.size == 0:
+                print("  No head region detected")
                 return False
 
             # Convert to HSV for better color detection
             hsv = cv2.cvtColor(head_region, cv2.COLOR_BGR2HSV)
 
-            # Define HSV ranges for common hardhat colors
-            # Yellow hardhats (most common)
-            yellow_lower = np.array([20, 100, 100])
-            yellow_upper = np.array([30, 255, 255])
+            # CRITICAL: Exclude skin tones first (these cause false positives)
+            # Skin tones in HSV are typically: H=0-25, S=30-170, V=80-255
+            skin_lower = np.array([0, 20, 50])
+            skin_upper = np.array([25, 170, 255])
+            skin_mask = cv2.inRange(hsv, skin_lower, skin_upper)
 
-            # Orange hardhats
-            orange_lower = np.array([10, 100, 100])
-            orange_upper = np.array([20, 255, 255])
+            # Hardhat colors - REQUIRE HIGH SATURATION (hardhats are vibrant, not dull)
+            # This excludes hair, skin, and most clothing
 
-            # Red hardhats (two ranges due to HSV wrap-around)
-            red_lower1 = np.array([0, 100, 100])
-            red_upper1 = np.array([10, 255, 255])
-            red_lower2 = np.array([160, 100, 100])
+            # Yellow hardhats (most common) - HIGH saturation required
+            yellow_lower = np.array([18, 120, 120])   # S>=120 = vibrant yellow
+            yellow_upper = np.array([35, 255, 255])
+
+            # Orange hardhats - HIGH saturation required
+            orange_lower = np.array([5, 120, 120])    # S>=120 = vibrant orange
+            orange_upper = np.array([18, 255, 255])
+
+            # Red hardhats - HIGH saturation required
+            red_lower1 = np.array([0, 120, 120])      # S>=120 = vibrant red
+            red_upper1 = np.array([5, 255, 255])
+            red_lower2 = np.array([160, 120, 120])
             red_upper2 = np.array([180, 255, 255])
 
-            # White/light hardhats
-            white_lower = np.array([0, 0, 200])
+            # Blue hardhats - HIGH saturation required
+            blue_lower = np.array([90, 120, 120])     # S>=120 = vibrant blue
+            blue_upper = np.array([130, 255, 255])
+
+            # Green hardhats - HIGH saturation required
+            green_lower = np.array([40, 120, 120])    # S>=120 = vibrant green
+            green_upper = np.array([85, 255, 255])
+
+            # White hardhats - LOW saturation but HIGH brightness
+            white_lower = np.array([0, 0, 200])       # Very bright, low saturation
             white_upper = np.array([180, 30, 255])
 
             # Create masks for each color
@@ -154,27 +169,48 @@ class PPEDetector:
             mask_orange = cv2.inRange(hsv, orange_lower, orange_upper)
             mask_red1 = cv2.inRange(hsv, red_lower1, red_upper1)
             mask_red2 = cv2.inRange(hsv, red_lower2, red_upper2)
+            mask_blue = cv2.inRange(hsv, blue_lower, blue_upper)
+            mask_green = cv2.inRange(hsv, green_lower, green_upper)
             mask_white = cv2.inRange(hsv, white_lower, white_upper)
 
-            # Combine all masks
-            combined_mask = mask_yellow | mask_orange | mask_red1 | mask_red2 | mask_white
+            # Combine all hardhat color masks
+            combined_mask = mask_yellow | mask_orange | mask_red1 | mask_red2 | mask_blue | mask_green | mask_white
 
-            # Calculate percentage of head region with hardhat colors
+            # EXCLUDE skin-colored pixels from hardhat detection
+            combined_mask = cv2.bitwise_and(combined_mask, cv2.bitwise_not(skin_mask))
+
+            # Calculate percentage of head region with hardhat colors (excluding skin)
             hardhat_pixels = np.sum(combined_mask > 0)
             total_pixels = head_region.shape[0] * head_region.shape[1]
             hardhat_percentage = (hardhat_pixels / total_pixels) * 100
 
-            # Require at least 15% of head region to be hardhat-colored
-            # This is conservative - reduces false positives
-            if hardhat_percentage >= 15:
-                print(f"Hardhat detected: {hardhat_percentage:.1f}% of head region")
+            skin_percentage = (np.sum(skin_mask > 0) / total_pixels) * 100
+
+            # Calculate color distribution for debugging
+            yellow_pct = (np.sum(mask_yellow > 0) / total_pixels) * 100
+            orange_pct = (np.sum(mask_orange > 0) / total_pixels) * 100
+            red_pct = (np.sum((mask_red1 | mask_red2) > 0) / total_pixels) * 100
+            blue_pct = (np.sum(mask_blue > 0) / total_pixels) * 100
+            green_pct = (np.sum(mask_green > 0) / total_pixels) * 100
+            white_pct = (np.sum(mask_white > 0) / total_pixels) * 100
+
+            # Stricter threshold - 12% of head region must be hardhat-colored
+            # This reduces false positives while still detecting real hardhats
+            threshold = 12.0
+
+            print(f"  Head region analysis - Hardhat colors: {hardhat_percentage:.1f}%, Skin: {skin_percentage:.1f}%")
+            print(f"    Yellow: {yellow_pct:.1f}%, Orange: {orange_pct:.1f}%, Red: {red_pct:.1f}%")
+            print(f"    Blue: {blue_pct:.1f}%, Green: {green_pct:.1f}%, White: {white_pct:.1f}%")
+
+            if hardhat_percentage >= threshold:
+                print(f"  ✓ HARDHAT DETECTED ({hardhat_percentage:.1f}% >= {threshold}%)")
                 return True
             else:
-                print(f"No hardhat: only {hardhat_percentage:.1f}% hardhat-colored pixels")
+                print(f"  ✗ NO HARDHAT ({hardhat_percentage:.1f}% < {threshold}%)")
                 return False
 
         except Exception as e:
-            print(f"Error checking hardhat: {e}")
+            print(f"  Error checking hardhat: {e}")
             # Default to False (violation) if check fails - safer for safety application
             return False
     

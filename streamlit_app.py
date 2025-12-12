@@ -59,8 +59,13 @@ def load_detector():
 @st.cache_resource
 def load_gemini():
     """Load Gemini recommender (cached for performance)"""
-    # Use Gemini API key from Streamlit secrets or environment
-    api_key = st.secrets.get('GEMINI_API_KEY', os.getenv('GEMINI_API_KEY'))
+    # Try to get API key from Streamlit secrets, fallback to environment variable
+    try:
+        api_key = st.secrets['GEMINI_API_KEY']
+    except (KeyError, FileNotFoundError):
+        # Fallback to environment variable (loaded from .env)
+        api_key = os.getenv('GEMINI_API_KEY')
+
     return GeminiRecommendations(api_key=api_key)
 
 

@@ -22,9 +22,10 @@ class GeminiRecommendations:
             self.enabled = False
         else:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            # Use gemini-2.5-flash for fast, accurate recommendations
+            self.model = genai.GenerativeModel('gemini-2.5-flash')
             self.enabled = True
-            print("Gemini API configured successfully")
+            print("Gemini API configured successfully with gemini-2.5-flash")
     
     def generate_recommendations(self, summary: Dict, detections: List[Dict]) -> List[str]:
         """
