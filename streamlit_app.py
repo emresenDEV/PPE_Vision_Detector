@@ -4,6 +4,10 @@ import numpy as np
 import os
 from datetime import datetime
 import tempfile
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import our custom modules
 from model.detector import PPEDetector
