@@ -1,0 +1,14 @@
+#Python
+venv/
+__pycache__/
+*.pyc
+
+#Models
+*.pt 
+
+#Env Variables
+.env
+.streamlit/secrets.toml
+
+#Output files
+*.pdf

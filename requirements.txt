@@ -1,0 +1,9 @@
+fastapi 
+uvicorn[standard] 
+torch  # PyTorch
+ultralytics   # YOLOv8 package
+opencv-python #OpenCV
+reportlab #ReportLab for PDF generation
+streamlit # Streamlit for web app development
+google-generativeai # Google Generative Gemini AI SDK
+python-dotenv
