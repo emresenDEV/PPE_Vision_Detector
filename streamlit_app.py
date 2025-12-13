@@ -6,8 +6,8 @@ from datetime import datetime
 import tempfile
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (override=True ensures .env takes precedence)
+load_dotenv(override=True)
 
 # Import our custom modules
 from model.detector import PPEDetector
