@@ -4,6 +4,8 @@
 
 An intelligent PPE (Personal Protective Equipment) compliance detection system that uses computer vision and AI to automatically identify safety violations and generate actionable recommendations.
 
+[**>>> LIVE DEMO**](https://ppevisiondetector.streamlit.app/) **<<<**
+
 ---
 
 ## 🎯 Overview
